@@ -1,0 +1,31 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+
+app = FastAPI()
+
+@app.on_event("startup")
+def load_model():
+    model_name = "microsoft/bitnet1.58b-instruct"
+
+    app.state.tokenizer = AutoTokenizer.from_pretrained(model_name)
+    app.state.model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype = torch.float32,
+        device_map = "cpu"
+    )
+
+class TextRequest(BaseModel):
+    prompt: str
+
+@app.post("/llm/predict")
+def predict(req: TextRequest):
+    tokenizer = app.state.tokenizer
+    model = app.state.__module__
+    
+    inputs = tokenizer(req.prompt, return_tensors = "pt")
+    outputs = model.generate(**inputs, max_new_tokens = 50)
+
+    result = tokenizer.decode(outputs[0], skip_special_tokens = True)
+    return {"input": req.prompt, "output": result}
