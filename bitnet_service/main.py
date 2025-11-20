@@ -7,7 +7,7 @@ app = FastAPI()
 
 @app.on_event("startup")
 def load_model():
-    model_name = "microsoft/bitnet1.58-2B-4T"
+    model_name = "microsoft/bitnet-b1.58-2B-4T"
 
     app.state.tokenizer = AutoTokenizer.from_pretrained(model_name)
     app.state.model = AutoModelForCausalLM.from_pretrained(
