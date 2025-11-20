@@ -13,7 +13,7 @@ app = FastAPI()
 def startup_event():
     app.state.yolo_model = YOLO("yolo11n.pt")
 
-    mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+    mongo_uri = os.getenv("MONGO_URI", "mongodb://mongo:27017")
     client = MongoClient(mongo_uri)
     app.state.db = client["coursework_db"]
     app.state.detections = app.state.db["detections"]
