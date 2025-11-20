@@ -7,7 +7,7 @@ app = FastAPI()
 
 @app.on_event("startup")
 def load_model():
-    model_name = "microsoft/bitnet1.58b-instruct"
+    model_name = "microsoft/bitnet1.58-2B-4T"
 
     app.state.tokenizer = AutoTokenizer.from_pretrained(model_name)
     app.state.model = AutoModelForCausalLM.from_pretrained(
@@ -22,7 +22,7 @@ class TextRequest(BaseModel):
 @app.post("/llm/predict")
 def predict(req: TextRequest):
     tokenizer = app.state.tokenizer
-    model = app.state.__module__
+    model = app.state.model
     
     inputs = tokenizer(req.prompt, return_tensors = "pt")
     outputs = model.generate(**inputs, max_new_tokens = 50)
