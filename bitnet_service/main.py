@@ -13,7 +13,6 @@ def load_model():
     app.state.model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype = torch.float32,
-        device_map = "cpu"
     )
 
 class TextRequest(BaseModel):
