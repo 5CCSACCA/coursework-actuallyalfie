@@ -3,12 +3,20 @@ from pydantic import BaseModel
 from ultralytics import YOLO
 from PIL import Image
 import io
+from pymongo import MongoClient
+import datetime
+import os
 
 app = FastAPI()
 
 @app.on_event("startup")
-def load_models():
+def startup_event():
     app.state.yolo_model = YOLO("yolo11n.pt")
+
+    mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+    client = MongoClient(mongo_uri)
+    app.state.db = client["coursework_db"]
+    app.state.detections = app.state.db["detections"]
 
 @app.get("/health")
 def health():
@@ -53,10 +61,34 @@ async def vision_detect(file: UploadFile = File(...)):
             }
         )
     
+    doc =  {
+        "model": "yolo11n",
+        "filename": file.filename,
+        "content_type": file.content_type,
+        "detections": detections,
+        "created_at": datetime.datetime.utcnow()
+    }
+
+    app.state.detections.insert_one(doc)
+
     return {
         "model": "yolo11n",
         "filename": file.filename,
-        "content-type": file.content_type,
-        "num_detections": len(detections),
-        "detections": detections
+        "content_type": file.content_type,
+        "detections": detections,
+        "num_detections": len(detections)
     }
+
+@app.get("/detections")
+def list_detections(limit: int = 10):
+    cursor = (
+        app.state.detections
+        .find({})
+        .sort("created_at", -1)
+        .limit(limit)
+    )
+    items = []
+    for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        items.append(doc)
+    return {"count": len(items), "items": items}
