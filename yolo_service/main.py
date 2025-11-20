@@ -6,6 +6,8 @@ import io
 from pymongo import MongoClient
 import datetime
 import os
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 app = FastAPI()
 
@@ -17,6 +19,11 @@ def startup_event():
     client = MongoClient(mongo_uri)
     app.state.db = client["coursework_db"]
     app.state.detections = app.state.db["detections"]
+
+    cred = credentials.Certificate("firebase_key.json")
+    firebase_admin.initialize_app(cred)
+    app.state.firestore = firestore.client()
+
 
 @app.get("/health")
 def health():
@@ -92,3 +99,23 @@ def list_detections(limit: int = 10):
         doc["_id"] = str(doc["_id"])
         items.append(doc)
     return {"count": len(items), "items": items}
+
+@app.post("/firebase/items")
+def create_item(item: dict):
+    doc_ref = app.state.firestore.collection("items").add(item)
+    return {"id": doc_ref[1].id}
+
+@app.get("/firebase/items/{item_id}")
+def get_item(item_id: str):
+    doc = app.state.firestore.collection("items").document(item_id).get()
+    return doc.to_dict() or {}
+
+@app.put("/firebase/items/{item_id}")
+def update_item(item_id: str, updates: dict):
+    app.state.firestore.collection("items").document(item_id).update(updates)
+    return {"status": "updates"}
+
+@app.delete("/firebase/items/{item_id}")
+def delete_item(item_id: str):
+    app.state.firestore.collection("items").document(item_id).delete()
+    return {"status": "deleted"}

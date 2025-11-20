@@ -3,3 +3,4 @@ ultralytics
 Pillow
 pymongo
 python-dotenv
+firebase-admin
