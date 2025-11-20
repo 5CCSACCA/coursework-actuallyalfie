@@ -1,3 +1,4 @@
 fastapi[standard]
 torch
 transformers
+accelerate
