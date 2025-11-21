@@ -77,6 +77,7 @@ async def vision_detect(file: UploadFile = File(...)):
     }
 
     app.state.detections.insert_one(doc)
+    app.state.firestore.collection("yolo_detections").add(doc)
 
     return {
         "model": "yolo11n",
@@ -113,7 +114,7 @@ def get_item(item_id: str):
 @app.put("/firebase/items/{item_id}")
 def update_item(item_id: str, updates: dict):
     app.state.firestore.collection("items").document(item_id).update(updates)
-    return {"status": "updates"}
+    return {"status": "updated"}
 
 @app.delete("/firebase/items/{item_id}")
 def delete_item(item_id: str):

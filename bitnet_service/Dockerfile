@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt requirements.txt
+COPY firebase_key.json firebase_key.json
 RUN pip install -r requirements.txt
 
 COPY . .
