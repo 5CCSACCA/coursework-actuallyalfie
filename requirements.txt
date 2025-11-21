@@ -1,5 +1,0 @@
-fastapi[standard]
-ultralytics
-Pillow
-pymongo
-python-dotenv
