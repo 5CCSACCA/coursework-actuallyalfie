@@ -54,8 +54,8 @@ def predict(req: TextRequest):
         "created_at": datetime.datetime.utcnow()
     }
     app.state.completions.insert_one(document)
-
-    app.state.firestore.collection("llm_completions").add(document)
+    firebase_doc = {k: v for k, v in document.items() if k != "_id"}
+    app.state.firestore.collection("llm_completions").add(firebase_doc)
 
     return {"model": MODEL_NAME, "prompt": req.prompt, "output": result}
 

@@ -77,7 +77,8 @@ async def vision_detect(file: UploadFile = File(...)):
     }
 
     app.state.detections.insert_one(doc)
-    app.state.firestore.collection("yolo_detections").add(doc)
+    firebase_doc = {k: v for k, v in doc.items() if k != "_id"}
+    app.state.firestore.collection("yolo_detections").add(firebase_doc)
 
     return {
         "model": "yolo11n",
