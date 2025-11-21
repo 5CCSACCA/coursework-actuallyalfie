@@ -102,22 +102,17 @@ def list_detections(limit: int = 10):
         items.append(doc)
     return {"count": len(items), "items": items}
 
-@app.post("/firebase/items")
-def create_item(item: dict):
-    doc_ref = app.state.firestore.collection("items").add(item)
-    return {"id": doc_ref[1].id}
-
-@app.get("/firebase/items/{item_id}")
-def get_item(item_id: str):
-    doc = app.state.firestore.collection("items").document(item_id).get()
+@app.get("/firebase/yolo/{doc_id}")
+def get_yolo_detection(doc_id: str):
+    doc = app.state.firestore.collection("yolo_detections").document(doc_id).get()
     return doc.to_dict() or {}
 
-@app.put("/firebase/items/{item_id}")
-def update_item(item_id: str, updates: dict):
-    app.state.firestore.collection("items").document(item_id).update(updates)
+@app.put("/firebase/yolo/{doc_id}")
+def update_yolo_detection(doc_id: str, updates: dict):
+    app.state.firestore.collection("yolo_detections").document(doc_id).update(updates)
     return {"status": "updated"}
 
-@app.delete("/firebase/items/{item_id}")
-def delete_item(item_id: str):
-    app.state.firestore.collection("items").document(item_id).delete()
+@app.delete("/firebase/yolo/{doc_id}")
+def delete_yolo_detection(doc_id: str):
+    app.state.firestore.collection("yolo_detections").document(doc_id).delete()
     return {"status": "deleted"}
