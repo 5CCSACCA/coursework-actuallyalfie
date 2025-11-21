@@ -29,16 +29,6 @@ def startup_event():
 def health():
     return {"status": "ok"}
 
-class TextRequest(BaseModel):
-    prompt: str
-
-@app.post("/llm/predict")
-def llm_predict(body: TextRequest):
-    return{
-        "model": 'bitnet-stub',
-        "input": body.prompt,
-        "output": f"Echo: {body.prompt}"
-    }
 
 @app.post("/vision/detect")
 async def vision_detect(file: UploadFile = File(...)):
