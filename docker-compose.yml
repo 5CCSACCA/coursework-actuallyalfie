@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:6
+    container_name: mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - backend
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - backend
+
+  yolo_service:
+    build:
+      context: ./yolo_service
+      dockerfile: Dockerfile
+    image: yolo-service
+    container_name: yolo-service
+    depends_on:
+      - mongo
+      - rabbitmq
+    ports:
+      - "8888:8888"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    networks:
+      - backend
+
+  bitnet_service:
+    build:
+      context: ./bitnet_service
+      dockerfile: Dockerfile
+    image: bitnet-service
+    container_name: bitnet-service
+    depends_on:
+      - mongo
+      - rabbitmq
+    ports:
+      - "9999:9999"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    networks:
+      - backend
+
+networks:
+  backend:
+
+volumes:
+  mongo_data:
