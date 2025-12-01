@@ -94,14 +94,26 @@ async def vision_detect(file: UploadFile = File(...)):
 
     app.state.detections.insert_one(doc)
     firebase_doc = {k: v for k, v in doc.items() if k != "_id"}
-    app.state.firestore.collection("yolo_detections").add(firebase_doc)
+    firebase_ref = app.state.firestore.collection("yolo_detections").add(firebase_doc)
+    firebase_doc_id = firebase_ref[1].id
+
+    object_names = [det["class_name"] for det in detections]
+
+    message = {
+        "doc_id" : firebase_doc_id,
+        "objects" : object_names,
+        "source" : "yolo_service"
+    }
+
+    await publish_message(message)
 
     return {
         "model": "yolo11n",
         "filename": file.filename,
         "content_type": file.content_type,
         "detections": detections,
-        "num_detections": len(detections)
+        "num_detections": len(detections),
+        "doc_id" : firebase_doc_id
     }
 
 @app.get("/detections")
