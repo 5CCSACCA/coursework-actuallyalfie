@@ -8,11 +8,18 @@ import datetime
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore
+import aio_pika
+import asyncio
+import json
 
 app = FastAPI()
 
+rabbitmq_connection = None
+rabbitmq_channel = None
+rabbitmq_exchange = None
+
 @app.on_event("startup")
-def startup_event():
+def startup_database():
     app.state.yolo_model = YOLO("yolo11n.pt")
 
     mongo_uri = os.getenv("MONGO_URI", "mongodb://mongo:27017")
@@ -24,6 +31,25 @@ def startup_event():
     firebase_admin.initialize_app(cred)
     app.state.firestore = firestore.client()
 
+@app.on_event("startup")
+async def startup_rabbitmq():
+    global rabbitmq_connection, rabbitmq_channel, rabbitmq_exchange
+
+    rabbitmq_url = os.getenv("RABBITMQ_URL")
+
+    rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
+    rabbitmq_channel = await rabbitmq_connection.channel()
+    rabbitmq_exchange = await rabbitmq_channel.declare_exchange(
+        "yolo_exchange",
+        aio_pika.ExchangeType.FANOUT
+    )
+
+async def publish_message(message: dict):
+    body = json.dumps(message).encode()
+    await rabbitmq_exchange.publish(
+        aio_pika.Message(body = body),
+        routing_key = ""
+    )
 
 @app.get("/health")
 def health():
