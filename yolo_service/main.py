@@ -132,3 +132,15 @@ def update_yolo_detection(doc_id: str, updates: dict):
 def delete_yolo_detection(doc_id: str):
     app.state.firestore.collection("yolo_detections").document(doc_id).delete()
     return {"status": "deleted"}
+
+@app.post("/test/rabbit")
+async def test_rabbitmq():
+    message = {
+        "status" : "ok",
+        "source" : "yolo_service",
+        "message" : "RabbitMQ connectivity test"
+     }
+    
+    await publish_message(message)
+
+    return {"sent" : True}
