@@ -7,10 +7,17 @@ import torch
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore
+import aio_pika
+import asyncio
+import json
 
 
 app = FastAPI()
 MODEL_NAME = "microsoft/bitnet-b1.58-2B-4T"
+
+rabbitmq_connection = None
+rabbitmq_channel = None
+rabbitmq_queue = None
 
 @app.on_event("startup")
 def load_model():
@@ -29,6 +36,24 @@ def load_model():
     cred = credentials.Certificate("firebase_key.json")
     firebase_admin.initialize_app(cred)
     app.state.firestore = firestore.client()
+
+@app.on_event("startup")
+async def startup_rabbitmq():
+    global rabbitmq_connection, rabbitmq_channel, rabbitmq_queue
+
+    rabbitmq_url = os.getenv("RABBITMQ_URL")
+    rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
+    rabbitmq_channel = await rabbitmq_connection.channel()
+
+    exchange = await rabbitmq_channel.declare_exchange(
+        "yolo_exchange",
+        aio_pika.ExchangeType.FANOUT
+    )
+
+    rabbitmq_queue = await rabbitmq_channel.declare_queue(exclusive = True)
+    await rabbitmq_queue.bind(exchange)
+
+    asyncio.create_task(consume_messages())
 
 @app.get("/health")
 def health():
@@ -89,3 +114,13 @@ def update_llm_completion(doc_id: str, updates: dict):
 def delete_llm_completion(doc_id: str):
     app.state.firestore.collection("llm_completions").document(doc_id).delete()
     return {"status": "deleted"}
+
+async def consume_messages():
+    async with rabbitmq_queue.iterator() as queue_iter:
+        async for message in queue_iter:
+            async with message.process():
+                try:
+                    payload = json.loads(message.body.decode())
+                    print("Recieved RabbitMQ message:", payload)
+                except Exception as e:
+                    print("Error processing message:", e)
