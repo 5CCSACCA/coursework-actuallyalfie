@@ -20,7 +20,7 @@ rabbitmq_channel = None
 rabbitmq_queue = None
 
 @app.on_event("startup")
-def load_model():
+async def load_model():
     app.state.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     app.state.model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
@@ -121,6 +121,7 @@ def delete_llm_completion(doc_id: str):
     return {"status": "deleted"}
 
 async def consume_messages():
+    print("BitNet: consume_messages loop starting")
     async with rabbitmq_queue.iterator() as queue_iter:
         async for message in queue_iter:
             async with message.process():
