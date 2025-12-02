@@ -16,7 +16,6 @@ app = FastAPI()
 
 rabbitmq_connection = None
 rabbitmq_channel = None
-rabbitmq_exchange = None
 
 @app.on_event("startup")
 def startup_database():
@@ -43,11 +42,7 @@ async def startup_rabbitmq():
             print(f"YOLO: connecting to RabbitMQ at {rabbitmq_url} (attempt {attempt})")
             rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
             rabbitmq_channel = await rabbitmq_connection.channel()
-            rabbitmq_exchange = await rabbitmq_channel.declare_exchange(
-                "yolo_exchange",
-                aio_pika.ExchangeType.FANOUT
-            )
-            print("YOLO: connected to RabbitMQ and declared yolo_exchange")
+            print("YOLO: connected to RabbitMQ")
             break
         except Exception as e:
             print("YOLO: RabbitMQ connection failed:", e)
@@ -55,22 +50,21 @@ async def startup_rabbitmq():
                 print("YOLO: giving up on RabbitMQ connection after max retires")
                 rabbitmq_connection = None
                 rabbitmq_channel = None
-                rabbitmq_exchange = None
                 break
         
             await asyncio.sleep(3)
 
 async def publish_message(message: dict):
-    if rabbitmq_exchange is None:
+    if rabbitmq_channel is None:
         print("YOLO: publish_message called but RabbitMQ is not connected")
         return
     
     body = json.dumps(message).encode()
-    await rabbitmq_exchange.publish(
+    await rabbitmq_channel.default_exchange.publish(
         aio_pika.Message(body = body),
-        routing_key = ""
+        routing_key = "bitnet_yolo_queue"
     )
-    print("YOLO: published message to yolo_exchange", message)
+    print("YOLO: published message to bitnet_yolo_queue", message)
 
 @app.get("/health")
 def health():

@@ -46,19 +46,11 @@ async def startup_rabbitmq():
     rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
     rabbitmq_channel = await rabbitmq_connection.channel()
 
-    exchange = await rabbitmq_channel.declare_exchange(
-        "yolo_exchange",
-        aio_pika.ExchangeType.FANOUT
-    )
-
-    print("BitNet: declared exchange yolo_exchange")
     queue_name = "bitnet_yolo_queue"
     rabbitmq_queue = await rabbitmq_channel.declare_queue(
         queue_name, 
         durable = True)
     print("BitNet: declared queue", rabbitmq_queue.name)
-    await rabbitmq_queue.bind(exchange)
-    print("BitNet: bound queue to yolo_exchange")
 
     asyncio.create_task(consume_messages())
     print("BitNet: started consume_messages task")
