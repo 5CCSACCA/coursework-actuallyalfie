@@ -42,6 +42,7 @@ async def startup_rabbitmq():
     global rabbitmq_connection, rabbitmq_channel, rabbitmq_queue
 
     rabbitmq_url = os.getenv("RABBITMQ_URL")
+    print("BitNet: connecting to RabbitMQ at", rabbitmq_url)
     rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
     rabbitmq_channel = await rabbitmq_connection.channel()
 
@@ -50,10 +51,14 @@ async def startup_rabbitmq():
         aio_pika.ExchangeType.FANOUT
     )
 
+    print("BitNet: declared exchange yolo_exchange")
     rabbitmq_queue = await rabbitmq_channel.declare_queue(exclusive = True)
+    print("BitNet: declared exclusive queue", rabbitmq_queue.name)
     await rabbitmq_queue.bind(exchange)
+    print("BitNet: bound queue to yolo_exchange")
 
     asyncio.create_task(consume_messages())
+    print("BitNet: started consume_messages task")
 
 @app.get("/health")
 def health():
