@@ -116,12 +116,20 @@ def delete_llm_completion(doc_id: str):
     return {"status": "deleted"}
 
 async def consume_messages():
+    global rabbitmq_queue
+
     print("BitNet: consume_messages loop starting")
-    async with rabbitmq_queue.iterator() as queue_iter:
-        async for message in queue_iter:
-            async with message.process():
-                try:
-                    payload = json.loads(message.body.decode())
-                    print("Recieved RabbitMQ message:", payload)
-                except Exception as e:
-                    print("Error processing message:", e)
+
+    try:
+        async with rabbitmq_queue.iterator() as queue_iter:
+            async for message in queue_iter:
+                async with message.process():
+                    try:
+                        body_text = message.body.decode()
+                        print("BitNet: decoded message body:", body_text)
+                        payload = json.loads(body_text)
+                        print("Recieved RabbitMQ message:", payload)
+                    except Exception as e:
+                        print("Error processing message:", repr(e))
+    except Exception as outer_e:
+        print("BitNet: fatal error in consume_messages:", repr(outer_e))
