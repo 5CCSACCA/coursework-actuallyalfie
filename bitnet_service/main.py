@@ -52,8 +52,11 @@ async def startup_rabbitmq():
     )
 
     print("BitNet: declared exchange yolo_exchange")
-    rabbitmq_queue = await rabbitmq_channel.declare_queue(exclusive = True)
-    print("BitNet: declared exclusive queue", rabbitmq_queue.name)
+    queue_name = "bitnet_yolo_queue"
+    rabbitmq_queue = await rabbitmq_channel.declare_queue(
+        queue_name, 
+        durable = True)
+    print("BitNet: declared queue", rabbitmq_queue.name)
     await rabbitmq_queue.bind(exchange)
     print("BitNet: bound queue to yolo_exchange")
 
