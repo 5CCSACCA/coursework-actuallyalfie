@@ -70,6 +70,7 @@ async def publish_message(message: dict):
         aio_pika.Message(body = body),
         routing_key = ""
     )
+    print("YOLO: published message to yolo_exchange", message)
 
 @app.get("/health")
 def health():
