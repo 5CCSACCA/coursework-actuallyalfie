@@ -36,15 +36,35 @@ async def startup_rabbitmq():
     global rabbitmq_connection, rabbitmq_channel, rabbitmq_exchange
 
     rabbitmq_url = os.getenv("RABBITMQ_URL")
+    max_retries = 10
 
-    rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
-    rabbitmq_channel = await rabbitmq_connection.channel()
-    rabbitmq_exchange = await rabbitmq_channel.declare_exchange(
-        "yolo_exchange",
-        aio_pika.ExchangeType.FANOUT
-    )
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"YOLO: connecting to RabbitMQ at {rabbitmq_url} (attempt {attempt})")
+            rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
+            rabbitmq_channel = await rabbitmq_connection.channel()
+            rabbitmq_exchange = await rabbitmq_channel.declare_exchange(
+                "yolo_exchange",
+                aio_pika.ExchangeType.FANOUT
+            )
+            print("YOLO: connected to RabbitMQ and declared yolo_exchange")
+            break
+        except Exception as e:
+            print("YOLO: RabbitMQ connection failed:", e)
+            if attempt == max_retries:
+                print("YOLO: giving up on RabbitMQ connection after max retires")
+                rabbitmq_connection = None
+                rabbitmq_channel = None
+                rabbitmq_exchange = None
+                break
+        
+            await asyncio.sleep(3)
 
 async def publish_message(message: dict):
+    if rabbitmq_exchange is None:
+        print("YOLO: publish_message called but RabbitMQ is not connected")
+        return
+    
     body = json.dumps(message).encode()
     await rabbitmq_exchange.publish(
         aio_pika.Message(body = body),
