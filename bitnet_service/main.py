@@ -52,7 +52,7 @@ async def startup_rabbitmq():
         durable = True)
     print("BitNet: declared queue", rabbitmq_queue.name)
 
-    asyncio.create_task(consume_messages())
+    await rabbitmq_queue.consume(on_message)
     print("BitNet: started consume_messages task")
 
 @app.get("/health")
@@ -133,3 +133,16 @@ async def consume_messages():
                         print("Error processing message:", repr(e))
     except Exception as outer_e:
         print("BitNet: fatal error in consume_messages:", repr(outer_e))
+
+    
+async def on_message(message: aio_pika.IncomingMessage):
+    async with message.process():
+        try:
+            body_text = message.body.decode()
+            print("BitNet: decoded message body:", body_text)
+
+            payload = json.loads(body_text)
+            print("Recieved RabbitMQ message:", payload)
+
+        except Exception as e:
+            print("BitNet: error processing message:", repr(e))
