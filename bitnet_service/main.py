@@ -12,6 +12,7 @@ import asyncio
 import json
 
 
+
 app = FastAPI()
 MODEL_NAME = "microsoft/bitnet-b1.58-2B-4T"
 
@@ -39,6 +40,7 @@ async def load_model():
 
 @app.on_event("startup")
 async def startup_rabbitmq():
+    print("BitNet: startup_rabbitmq called")
     global rabbitmq_connection, rabbitmq_channel, rabbitmq_queue
 
     rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
@@ -129,6 +131,7 @@ def delete_llm_completion(doc_id: str):
 
     
 async def on_message(message: aio_pika.IncomingMessage):
+    print("BitNet: on_message callback TRIGGERED")
     async with message.process():
         try:
             body_text = message.body.decode()
