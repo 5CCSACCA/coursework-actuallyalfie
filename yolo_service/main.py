@@ -42,6 +42,11 @@ async def startup_rabbitmq():
             print(f"YOLO: connecting to RabbitMQ at {rabbitmq_url} (attempt {attempt})")
             rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
             rabbitmq_channel = await rabbitmq_connection.channel()
+
+            queue_name = "bitnet_yolo_queue" 
+            await rabbitmq_channel.declare_queue(queue_name, durable = True)
+            print("YOLO: declared queue", queue_name)
+
             print("YOLO: connected to RabbitMQ")
             break
         except Exception as e:
