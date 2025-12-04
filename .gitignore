@@ -5,3 +5,5 @@ bitnet_cpp/model/*
 
 bitnet_service/bitnet_model/*
 !bitnet_service/bitnet_model/.gitkeep
+
+.DS_Store

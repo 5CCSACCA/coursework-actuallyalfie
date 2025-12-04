@@ -19,7 +19,9 @@ rabbitmq_channel = None
 rabbitmq_queue = None
 
 @app.on_event("startup")
-async def load_model():
+async def startup():
+    print("BitNet: startup() called")
+
     mongo_uri = os.getenv("MONGO_URI", "mongodb://mongo:27017")
     client = MongoClient(mongo_uri)
     app.state.db = client["coursework_db"]
@@ -29,9 +31,6 @@ async def load_model():
     firebase_admin.initialize_app(cred)
     app.state.firestore = firestore.client()
 
-@app.on_event("startup")
-async def startup_rabbitmq():
-    print("BitNet: startup_rabbitmq called")
     global rabbitmq_connection, rabbitmq_channel, rabbitmq_queue
 
     rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
