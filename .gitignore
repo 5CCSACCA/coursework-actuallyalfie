@@ -1,0 +1,7 @@
+yolo_service/yolo11n.pt
+
+bitnet_cpp/model/*
+!bitnet_cpp/model/.gitkeep
+
+bitnet_service/bitnet_model/*
+!bitnet_service/bitnet_model/.gitkeep

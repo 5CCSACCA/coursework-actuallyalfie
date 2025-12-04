@@ -22,21 +22,15 @@ services:
     networks:
       - backend
 
-  yolo_service:
+  bitnet_cpp:
     build:
-      context: ./yolo_service
+      context: ./bitnet_cpp
       dockerfile: Dockerfile
-    image: yolo-service
-    container_name: yolo-service
-    depends_on:
-      - mongo
-      - rabbitmq
-      - bitnet_service
+    container_name: bitnet
     ports:
-      - "8888:8888"
-    environment:
-      - MONGO_URI=mongodb://mongo:27017
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - "8080:8080"
+    volumes:
+      - ./bitnet_cpp/model:/BitNet/model
     networks:
       - backend
 
@@ -49,8 +43,28 @@ services:
     depends_on:
       - mongo
       - rabbitmq
+      - bitnet_cpp
     ports:
       - "9999:9999"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - BITNET_URL=http://bitnet:8080
+    networks:
+      - backend
+
+  yolo_service:
+    build:
+      context: ./yolo_service
+      dockerfile: Dockerfile
+    image: yolo-service
+    container_name: yolo-service
+    depends_on:
+      - mongo
+      - rabbitmq
+      - bitnet_service
+    ports:
+      - "8888:8888"
     environment:
       - MONGO_URI=mongodb://mongo:27017
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/

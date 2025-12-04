@@ -1,9 +1,8 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from pymongo import MongoClient
 import datetime
-import torch
+import httpx
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -11,10 +10,9 @@ import aio_pika
 import asyncio
 import json
 
-
-
 app = FastAPI()
-MODEL_NAME = "microsoft/bitnet-b1.58-2B-4T"
+BITNET_MODEL_NAME = "ggml-model-i2_s.gguf"
+BITNET_URL = os.getenv("BITNET_URL", "http://bitnet:8080")
 
 rabbitmq_connection = None
 rabbitmq_channel = None
@@ -22,13 +20,6 @@ rabbitmq_queue = None
 
 @app.on_event("startup")
 async def load_model():
-    app.state.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-    app.state.model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        torch_dtype = torch.float32,
-        device_map = "cpu"
-    )
-
     mongo_uri = os.getenv("MONGO_URI", "mongodb://mongo:27017")
     client = MongoClient(mongo_uri)
     app.state.db = client["coursework_db"]
@@ -75,18 +66,37 @@ def health():
 class TextRequest(BaseModel):
     prompt: str
 
-@app.post("/llm/predict")
-def predict(req: TextRequest):
-    tokenizer = app.state.tokenizer
-    model = app.state.model
-    
-    inputs = tokenizer(req.prompt, return_tensors = "pt")
-    outputs = model.generate(**inputs, max_new_tokens = 50)
+async def call_bitnet_llm(user_message: str) -> dict:
+    payload = {
+        "model": BITNET_MODEL_NAME,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a chatbot that answers questions. Don't overthink things."
+            },
+            {
+                "role": "user",
+                "content": user_message
+            }
+        ]
+    }
 
-    result = tokenizer.decode(outputs[0], skip_special_tokens = True)
+    async with httpx.AsyncClient(timeout = None) as client:
+        response = await client.post(f"{BITNET_URL}/v1/chat/completions", json = payload)
+        response.raise_for_status()
+        return response.json()
+
+@app.post("/llm/predict")
+async def predict(req: TextRequest):
+    completion = await call_bitnet_llm(req.prompt)
+
+    try:
+        result = completion["choices"][0]["message"]["content"]
+    except Exception:
+        result = str(completion)
 
     document = {
-        "model": MODEL_NAME,
+        "model": BITNET_MODEL_NAME,
         "prompt": req.prompt,
         "output": result,
         "created_at": datetime.datetime.utcnow()
@@ -95,7 +105,7 @@ def predict(req: TextRequest):
     firebase_doc = {k: v for k, v in document.items() if k != "_id"}
     app.state.firestore.collection("llm_completions").add(firebase_doc)
 
-    return {"model": MODEL_NAME, "prompt": req.prompt, "output": result}
+    return {"model": BITNET_MODEL_NAME, "prompt": req.prompt, "output": result}
 
 @app.get("/llm/completions")
 def list_completions(limit: int = 10):
