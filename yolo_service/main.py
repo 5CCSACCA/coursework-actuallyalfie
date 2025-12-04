@@ -65,11 +65,18 @@ async def publish_message(message: dict):
         return
     
     body = json.dumps(message).encode()
-    await rabbitmq_channel.default_exchange.publish(
-        aio_pika.Message(body = body),
-        routing_key = "bitnet_yolo_queue"
+
+    try:
+        exchange = rabbitmq_channel.declare_exchange
+        print("YOLO: about to publish to bitnet_yolo_queue via default exchange")
+        await exchange.publish(
+            aio_pika.Message(body = body),
+            routing_key = "bitnet_yolo_queue",
+            mandatory = True
     )
-    print("YOLO: published message to bitnet_yolo_queue", message)
+        print("YOLO: published message to bitnet_yolo_queue", message)
+    except Exception as e:
+        print("YOLO: ERROR publishing to bitnet_yolo_queue:", repr(e))
 
 @app.get("/health")
 def health():
