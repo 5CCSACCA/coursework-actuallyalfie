@@ -32,9 +32,9 @@ def startup_database():
 
 @app.on_event("startup")
 async def startup_rabbitmq():
-    global rabbitmq_connection, rabbitmq_channel, rabbitmq_exchange
+    global rabbitmq_connection, rabbitmq_channel
 
-    rabbitmq_url = os.getenv("RABBITMQ_URL")
+    rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
     max_retries = 10
 
     for attempt in range(1, max_retries + 1):
@@ -43,7 +43,7 @@ async def startup_rabbitmq():
             rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
             rabbitmq_channel = await rabbitmq_connection.channel()
 
-            queue_name = "bitnet_yolo_queue" 
+            queue_name = os.getenv("RABBITMQ_QUEUE", "bitnet_yolo_queue")
             await rabbitmq_channel.declare_queue(queue_name, durable = True)
             print("YOLO: declared queue", queue_name)
 
@@ -60,6 +60,7 @@ async def startup_rabbitmq():
             await asyncio.sleep(3)
 
 async def publish_message(message: dict):
+    global rabbitmq_channel
     if rabbitmq_channel is None:
         print("YOLO: publish_message called but RabbitMQ is not connected")
         return
@@ -67,16 +68,17 @@ async def publish_message(message: dict):
     body = json.dumps(message).encode()
 
     try:
-        exchange = rabbitmq_channel.declare_exchange
-        print("YOLO: about to publish to bitnet_yolo_queue via default exchange")
+        queue_name = os.getenv("RABBITMQ_QUEUE", "bitnet_yolo_queue")
+        exchange = rabbitmq_channel.default_exchange
+        print(f"YOLO: about to publish to {queue_name} via default exchange")
         await exchange.publish(
             aio_pika.Message(body = body),
-            routing_key = "bitnet_yolo_queue",
+            routing_key = queue_name,
             mandatory = True
-    )
-        print("YOLO: published message to bitnet_yolo_queue", message)
+        )
+        print(f"YOLO: published message to {queue_name}", message)
     except Exception as e:
-        print("YOLO: ERROR publishing to bitnet_yolo_queue:", repr(e))
+        print("YOLO: ERROR publishing RabbitMQ message:", repr(e))
 
 @app.get("/health")
 def health():

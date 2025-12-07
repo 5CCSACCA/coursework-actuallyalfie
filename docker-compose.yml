@@ -49,6 +49,7 @@ services:
     environment:
       - MONGO_URI=mongodb://mongo:27017
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - RABBITMQ_QUEUE=bitnet_yolo_queue
       - BITNET_URL=http://bitnet:8080
     networks:
       - backend
@@ -68,6 +69,7 @@ services:
     environment:
       - MONGO_URI=mongodb://mongo:27017
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - RABBITMQ_QUEUE=bitnet_yolo_queue
     networks:
       - backend
 

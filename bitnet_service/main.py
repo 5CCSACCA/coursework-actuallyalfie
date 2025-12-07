@@ -14,10 +14,6 @@ app = FastAPI()
 BITNET_MODEL_NAME = "ggml-model-i2_s.gguf"
 BITNET_URL = os.getenv("BITNET_URL", "http://bitnet:8080")
 
-rabbitmq_connection = None
-rabbitmq_channel = None
-rabbitmq_queue = None
-
 @app.on_event("startup")
 async def startup():
     print("BitNet: startup() called")
@@ -31,32 +27,57 @@ async def startup():
     firebase_admin.initialize_app(cred)
     app.state.firestore = firestore.client()
 
-    global rabbitmq_connection, rabbitmq_channel, rabbitmq_queue
+    app.state.rabbitmq_task = asyncio.create_task(rabbitmq_worker())
+    print("BitNet: RabbitMQ worker task created")
 
+@app.on_event("shutdown")
+async def shutdown():
+    print("BitNet: shutdown() called")
+    rabbitmq_task = getattr(app.state, "rabbitmq_task", None)
+    if rabbitmq_task is not None:
+        rabbitmq_task.cancel()
+        try:
+            await rabbitmq_task
+        except asyncio.CancelledError:
+            pass
+
+async def rabbitmq_worker():
     rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-    print("BitNet: connecting to RabbitMQ at", rabbitmq_url)
+    queue_name = os.getenv("RABBITMQ_QUEUE", "bitnet_yolo_queue")
 
     while True:
+        connection = None
         try:
-            rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
+            print("BitNet: connecting to RabbitMQ at", rabbitmq_url)
+            connection = await aio_pika.connect_robust(rabbitmq_url)
             print("BitNet: connected to RabbitMQ")
+
+            channel = await connection.channel()
+            await channel.set_qos(prefetch_count = 1)
+
+            queue = await channel.declare_queue(
+                queue_name,
+                durable = True
+            )
+            print("BitNet: declared queue", queue.name)
+
+            await queue.consume(on_message)
+            print("BitNet: worker listening for YOLO messages...")
+
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            print("BitNet: RabbitMQ worker cancelled")
+            if connection is not None:
+                await connection.close()
             break
         except Exception as e:
-            print("BitNet: waiting for RabbitMQ...", e)
-            await asyncio.sleep(2)
-
-    rabbitmq_channel = await rabbitmq_connection.channel()
-    await rabbitmq_channel.set_qos(prefetch_count = 1)
-
-    queue_name = "bitnet_yolo_queue"
-    rabbitmq_queue = await rabbitmq_channel.declare_queue(
-        queue_name,
-        durable = True
-    )
-    print("BitNet: declared queue", rabbitmq_queue.name)
-
-    await rabbitmq_queue.consume(on_message)
-    print("BitNet: worker listening for YOLO messages...")
+            print("BitNet: RabbitMQ worker error, retrying in 5 seconds:", repr(e))
+            if connection is not None:
+                try:
+                    await connection.close()
+                except Exception:
+                    pass
+            await asyncio.sleep(5)
 
 @app.get("/health")
 def health():
