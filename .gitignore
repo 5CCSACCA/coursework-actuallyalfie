@@ -6,4 +6,7 @@ bitnet_cpp/model/*
 bitnet_service/bitnet_model/*
 !bitnet_service/bitnet_model/.gitkeep
 
+__pycache__
+.pytest_cache
+
 .DS_Store
