@@ -17,6 +17,15 @@ import httpx
 CONF_THRESHOLD = float(os.getenv("YOLO_CONF_THRESHOLD", "0.5"))
 FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY")
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
 app = FastAPI()
 
 security_scheme = HTTPBearer(auto_error = False)
@@ -103,9 +112,64 @@ async def publish_message(message: dict):
     except Exception as e:
         print("YOLO: ERROR publishing RabbitMQ message:", repr(e))
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/auth/register")
+def register_user(req: RegisterRequest):
+    try:
+        user_record = firebase_auth.create_user(
+            email = req.email,
+            password = req.password
+        )
+        return {
+            "uid": user_record.uid,
+            "email": user_record.email
+        }
+    except Exception:
+        raise HTTPException(
+            status_code = status.HTTP_400_BAD_REQUEST,
+            detail = "Failed to create user"
+        )
+
+
+@app.post("/auth/login")
+async def login_user(req: LoginRequest):
+    if not FIREBASE_API_KEY:
+        raise HTTPException(
+            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail = "FIREBASE_API_KEY not configured"
+        )
+
+    url = (
+        "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
+        f"?key={FIREBASE_API_KEY}"
+    )
+    payload = {
+        "email": req.email,
+        "password": req.password,
+        "returnSecureToken": True
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, json = payload)
+
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code = status.HTTP_400_BAD_REQUEST,
+            detail = "Invalid email or password"
+        )
+
+    data = resp.json()
+    return {
+        "id_token": data["idToken"],
+        "refresh_token": data.get("refreshToken"),
+        "expires_in": data.get("expiresIn"),
+        "user_id": data.get("localId")
+    }
 
 
 @app.post("/vision/detect")
