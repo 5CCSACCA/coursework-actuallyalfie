@@ -164,6 +164,13 @@ async def on_message(message: aio_pika.IncomingMessage):
     print("BitNet: on_message callback TRIGGERED")
     async with message.process():
         try:
+            app.state.db["rabbitmq_debug"].insert_one(
+                {
+                    "recieved_at": datetime.datetime.utcnow(),
+                    "raw_body": message.body.decode(errors = "replace")
+                }
+            )
+
             body_text = message.body.decode()
             print("BitNet: decoded message body:", body_text)
 
