@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from pymongo import MongoClient
+from bson import ObjectId
 import datetime
 import httpx
 import os
@@ -106,6 +107,22 @@ async def call_bitnet_llm(user_message: str) -> dict:
         response.raise_for_status()
         return response.json()
 
+def save_llm_completion(prompt: str, result: str, extra: dict | None = None) -> dict:
+    document = {
+        "model": BITNET_MODEL_NAME,
+        "prompt": prompt,
+        "output": result,
+        "created_at": datetime.datetime.utcnow()
+    }
+    if extra:
+        document.update(extra)
+
+    app.state.completions.insert_one(document)
+    firebase_doc = {k: v for k, v in document.items() if k != "_id"}
+    app.state.firestore.collection("llm_completions").add(firebase_doc)
+
+    return document
+
 @app.post("/llm/predict")
 async def predict(req: TextRequest):
     completion = await call_bitnet_llm(req.prompt)
@@ -115,15 +132,7 @@ async def predict(req: TextRequest):
     except Exception:
         result = str(completion)
 
-    document = {
-        "model": BITNET_MODEL_NAME,
-        "prompt": req.prompt,
-        "output": result,
-        "created_at": datetime.datetime.utcnow()
-    }
-    app.state.completions.insert_one(document)
-    firebase_doc = {k: v for k, v in document.items() if k != "_id"}
-    app.state.firestore.collection("llm_completions").add(firebase_doc)
+    save_llm_completion(req.prompt, result)
 
     return {"model": BITNET_MODEL_NAME, "prompt": req.prompt, "output": result}
 
@@ -161,22 +170,53 @@ def delete_llm_completion(doc_id: str):
 
     
 async def on_message(message: aio_pika.IncomingMessage):
-    print("BitNet: on_message callback TRIGGERED")
     async with message.process():
         try:
-            app.state.db["rabbitmq_debug"].insert_one(
-                {
-                    "recieved_at": datetime.datetime.utcnow(),
-                    "raw_body": message.body.decode(errors = "replace")
-                }
-            )
-
             body_text = message.body.decode()
             print("BitNet: decoded message body:", body_text)
 
             payload = json.loads(body_text)
-            print("Recieved RabbitMQ message:", payload)
+            print("Received RabbitMQ message:", payload)
 
+            doc_id = payload.get("doc_id")
+            objects = payload.get("objects", [])
 
+            if not doc_id:
+                print("BitNet: message missing doc_id, skipping")
+                return
+
+            detections = app.state.db["detections"]
+            detection_doc = None
+            try:
+                detection_doc = detections.find_one({"_id": ObjectId(doc_id)})
+            except Exception as fetch_err:
+                print("BitNet: failed to fetch detection:", repr(fetch_err))
+
+            objects_str = ", ".join(objects)
+            prompt_parts = [
+                "You are helping a user understand what is in a photo.",
+                f"The detected objects are: {objects_str or 'none'}."
+            ]
+
+            if detection_doc is not None:
+                extra_meta = {k: v for k, v in detection_doc.items() if k != "_id"}
+                prompt_parts.append(f"Additional detection metadata: {extra_meta}")
+
+            prompt_parts.append(
+                "Write 2-3 friendly sentences describing the scene, "
+                "then provide one short caption for the image in quotes. "
+                "Keep the answer under 80 words."
+            )
+            prompt = "\n".join(prompt_parts)
+
+            completion = await call_bitnet_llm(prompt)
+            try:
+                result = completion["choices"][0]["message"]["content"]
+            except Exception:
+                result = str(completion)
+
+            extra = {"detection_doc_id": doc_id, "objects": objects}
+            save_llm_completion(prompt, result, extra)
+            print("BitNet: LLM post-processing complete for detection", doc_id)
         except Exception as e:
             print("BitNet: error processing message:", repr(e))
