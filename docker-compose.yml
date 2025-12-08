@@ -51,7 +51,7 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - RABBITMQ_QUEUE=bitnet_yolo_queue
       - BITNET_URL=http://bitnet:8080
-      - FIREBASE_API_KEY="AIzaSyD9B-ASLhR6HeyzhDgsyE0vQ0W5lJTQTVU"
+      - FIREBASE_API_KEY=AIzaSyD9B-ASLhR6HeyzhDgsyE0vQ0W5lJTQTVU
     networks:
       - backend
 
@@ -72,6 +72,28 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - RABBITMQ_QUEUE=bitnet_yolo_queue
       - FIREBASE_API_KEY=AIzaSyD9B-ASLhR6HeyzhDgsyE0vQ0W5lJTQTVU
+    networks:
+      - backend
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - backend
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
     networks:
       - backend
 

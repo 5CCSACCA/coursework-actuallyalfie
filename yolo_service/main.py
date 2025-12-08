@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from ultralytics import YOLO
@@ -13,6 +13,7 @@ import aio_pika
 import asyncio
 import json
 import httpx
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 CONF_THRESHOLD = float(os.getenv("YOLO_CONF_THRESHOLD", "0.5"))
 FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY")
@@ -27,6 +28,24 @@ class LoginRequest(BaseModel):
     password: str
 
 app = FastAPI()
+
+request_counter = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["service", "path", "method", "status_code"],
+)
+
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    response = await call_next(request)
+    request_counter.labels(
+        service = "yolo_service",
+        path = request.url.path,
+        method = request.method,
+        status_code = str(response.status_code),
+    ).inc()
+    return response
 
 security_scheme = HTTPBearer(auto_error = False)
 
@@ -117,6 +136,10 @@ async def publish_message(message: dict):
 def health():
     return {"status": "ok"}
 
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type = CONTENT_TYPE_LATEST)
 
 @app.post("/auth/register")
 def register_user(req: RegisterRequest):

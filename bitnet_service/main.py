@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from pymongo import MongoClient
@@ -11,8 +11,27 @@ from firebase_admin import credentials, firestore, auth as firebase_auth
 import aio_pika
 import asyncio
 import json
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 app = FastAPI()
+
+request_counter = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["service", "path", "method", "status_code"],
+)
+
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    response = await call_next(request)
+    request_counter.labels(
+        service = "bitnet_service",
+        path = request.url.path,
+        method = request.method,
+        status_code = str(response.status_code),
+    ).inc()
+    return response
 
 security_scheme = HTTPBearer(auto_error = False)
 
@@ -104,6 +123,10 @@ async def rabbitmq_worker():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type = CONTENT_TYPE_LATEST)
 
 class RegisterRequest(BaseModel):
     email: str

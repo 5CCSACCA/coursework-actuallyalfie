@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "yolo_service"
+    static_configs:
+      - targets: ["yolo-service:8888"]
+
+  - job_name: "bitnet_service"
+    static_configs:
+      - targets: ["bitnet-service:9999"]

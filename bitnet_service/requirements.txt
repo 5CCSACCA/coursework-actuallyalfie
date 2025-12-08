@@ -3,3 +3,4 @@ pymongo
 python-dotenv
 firebase-admin
 aio-pika
+prometheus-client
