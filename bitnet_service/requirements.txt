@@ -1,7 +1,4 @@
 fastapi[standard]
-torch
-transformers
-accelerate
 pymongo
 python-dotenv
 firebase-admin

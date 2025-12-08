@@ -2,6 +2,5 @@ fastapi[standard]
 ultralytics
 Pillow
 pymongo
-python-dotenv
 firebase-admin
 aio-pika
