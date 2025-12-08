@@ -34,6 +34,7 @@ def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(se
 
 BITNET_MODEL_NAME = "ggml-model-i2_s.gguf"
 BITNET_URL = os.getenv("BITNET_URL", "http://bitnet:8080")
+FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY")
 
 @app.on_event("startup")
 async def startup():
@@ -104,8 +105,67 @@ async def rabbitmq_worker():
 def health():
     return {"status": "ok"}
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
 class TextRequest(BaseModel):
     prompt: str
+
+@app.post("/auth/register")
+def register_user(req: RegisterRequest):
+    try:
+        user_record = firebase_auth.create_user(
+            email = req.email,
+            password = req.password,
+        )
+        return {
+            "uid": user_record.uid,
+            "email": user_record.email,
+        }
+    except Exception:
+        raise HTTPException(
+            status_code = 400,
+            detail = "Failed to create user"
+        )
+
+
+@app.post("/auth/login")
+async def login_user(req: LoginRequest):
+    if not FIREBASE_API_KEY:
+        raise HTTPException(
+            status_code = 500,
+            detail = "FIREBASE_API_KEY not configured"
+        )
+
+    url = (
+        "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
+        f"?key={FIREBASE_API_KEY}"
+    )
+    payload = {
+        "email": req.email,
+        "password": req.password,
+        "returnSecureToken": True,
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, json = payload)
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code = 400, detail = "Invalid email or password")
+
+    data = resp.json()
+    return {
+        "id_token": data["idToken"],
+        "refresh_token": data.get("refreshToken"),
+        "expires_in": data.get("expiresIn"),
+        "user_id": data.get("localId"),
+    }
 
 async def call_bitnet_llm(user_message: str) -> dict:
     payload = {

@@ -51,6 +51,7 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - RABBITMQ_QUEUE=bitnet_yolo_queue
       - BITNET_URL=http://bitnet:8080
+      - FIREBASE_API_KEY="AIzaSyD9B-ASLhR6HeyzhDgsyE0vQ0W5lJTQTVU"
     networks:
       - backend
 

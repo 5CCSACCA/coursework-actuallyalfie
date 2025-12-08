@@ -12,18 +12,16 @@ from firebase_admin import credentials, firestore, auth as firebase_auth
 import aio_pika
 import asyncio
 import json
+import httpx
 
 CONF_THRESHOLD = float(os.getenv("YOLO_CONF_THRESHOLD", "0.5"))
+FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY")
 
 app = FastAPI()
 
 security_scheme = HTTPBearer(auto_error = False)
 
 def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(security_scheme)):
-    """
-    Verifies Firebase ID token from Authorization: Bearer <token> header.
-    Returns decoded token dict on success, or raises HTTPException on failure.
-    """
     if credentials is None or not credentials.credentials:
         raise HTTPException(
             status_code = status.HTTP_401_UNAUTHORIZED,
