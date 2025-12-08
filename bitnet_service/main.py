@@ -283,6 +283,7 @@ async def on_message(message: aio_pika.IncomingMessage):
 
             doc_id = payload.get("doc_id")
             objects = payload.get("objects", [])
+            user_id = payload.get("user_id")
 
             if not doc_id:
                 print("BitNet: message missing doc_id, skipping")
@@ -318,7 +319,7 @@ async def on_message(message: aio_pika.IncomingMessage):
             except Exception:
                 result = str(completion)
 
-            extra = {"detection_doc_id": doc_id, "objects": objects}
+            extra = {"detection_doc_id": doc_id, "objects": objects, "user_id": user_id}
             save_llm_completion(prompt, result, extra)
             print("BitNet: LLM post-processing complete for detection", doc_id)
         except Exception as e:
