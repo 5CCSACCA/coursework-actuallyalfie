@@ -246,7 +246,8 @@ async def vision_detect(file: UploadFile = File(...), user: dict = Depends(verif
     message = {
         "doc_id": detection_id,
         "objects": object_names,
-        "source": "yolo_service"
+        "source": "yolo_service",
+        "user_id": user.get("uid")
     }
 
     await publish_message(message)
