@@ -1,4 +1,5 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from ultralytics import YOLO
 from PIL import Image
@@ -7,7 +8,7 @@ from pymongo import MongoClient
 import datetime
 import os
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth as firebase_auth
 import aio_pika
 import asyncio
 import json
@@ -15,6 +16,28 @@ import json
 CONF_THRESHOLD = float(os.getenv("YOLO_CONF_THRESHOLD", "0.5"))
 
 app = FastAPI()
+
+security_scheme = HTTPBearer(auto_error = False)
+
+def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(security_scheme)):
+    """
+    Verifies Firebase ID token from Authorization: Bearer <token> header.
+    Returns decoded token dict on success, or raises HTTPException on failure.
+    """
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = "Missing or invalid Authorization header"
+        )
+    id_token = credentials.credentials
+    try:
+        decoded_token = firebase_auth.verify_id_token(id_token)
+        return decoded_token
+    except Exception:
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = "Invalid or expired Firebase ID token"
+        )
 
 rabbitmq_connection = None
 rabbitmq_channel = None
@@ -88,7 +111,7 @@ def health():
 
 
 @app.post("/vision/detect")
-async def vision_detect(file: UploadFile = File(...)):
+async def vision_detect(file: UploadFile = File(...), user: dict = Depends(verify_firebase_token)):
     
     contents = await file.read()
 
@@ -122,7 +145,8 @@ async def vision_detect(file: UploadFile = File(...)):
         "filename": file.filename,
         "content_type": file.content_type,
         "detections": detections,
-        "created_at": datetime.datetime.utcnow()
+        "created_at": datetime.datetime.utcnow(),
+        "user_id": user.get("uid")
     }
 
     insert_result = app.state.detections.insert_one(doc)
@@ -153,10 +177,10 @@ async def vision_detect(file: UploadFile = File(...)):
     }
 
 @app.get("/detections")
-def list_detections(limit: int = 10):
+def list_detections(limit: int = 10, user: dict = Depends(verify_firebase_token)):
     cursor = (
         app.state.detections
-        .find({})
+        .find({"user_id": user.get("uid")})
         .sort("created_at", -1)
         .limit(limit)
     )

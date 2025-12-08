@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from pymongo import MongoClient
 from bson import ObjectId
@@ -6,12 +7,31 @@ import datetime
 import httpx
 import os
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth as firebase_auth
 import aio_pika
 import asyncio
 import json
 
 app = FastAPI()
+
+security_scheme = HTTPBearer(auto_error = False)
+
+def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(security_scheme)):
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = "Missing or invalid Authorization header"
+        )
+    id_token = credentials.credentials
+    try:
+        decoded_token = firebase_auth.verify_id_token(id_token)
+        return decoded_token
+    except Exception:
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = "Invalid or expired Firebase ID token"
+        )
+
 BITNET_MODEL_NAME = "ggml-model-i2_s.gguf"
 BITNET_URL = os.getenv("BITNET_URL", "http://bitnet:8080")
 
@@ -124,7 +144,7 @@ def save_llm_completion(prompt: str, result: str, extra: dict | None = None) -> 
     return document
 
 @app.post("/llm/predict")
-async def predict(req: TextRequest):
+async def predict(req: TextRequest, user: dict = Depends(verify_firebase_token)):
     completion = await call_bitnet_llm(req.prompt)
 
     try:
@@ -132,15 +152,15 @@ async def predict(req: TextRequest):
     except Exception:
         result = str(completion)
 
-    save_llm_completion(req.prompt, result)
+    save_llm_completion(req.prompt, result, extra = {"user_id": user.get("uid")})
 
     return {"model": BITNET_MODEL_NAME, "prompt": req.prompt, "output": result}
 
 @app.get("/llm/completions")
-def list_completions(limit: int = 10):
+def list_completions(limit: int = 10, user: dict = Depends(verify_firebase_token)):
     cursor = (
         app.state.completions
-        .find({})
+        .find({"user_id": user.get("uid")})
         .sort("created_at", -1)
         .limit(limit)
     )
@@ -153,17 +173,17 @@ def list_completions(limit: int = 10):
     return {"count": len(items), "items": items}
 
 @app.get("/firebase/llm/{doc_id}")
-def get_llm_completion(doc_id: str):
+def get_llm_completion(doc_id: str, user: dict = Depends(verify_firebase_token)):
     doc = app.state.firestore.collection("llm_completions").document(doc_id).get()
     return doc.to_dict() or {}
 
 @app.put("/firebase/llm/{doc_id}")
-def update_llm_completion(doc_id: str, updates: dict):
+def update_llm_completion(doc_id: str, updates: dict, user: dict = Depends(verify_firebase_token)):
     app.state.firestore.collection("llm_completions").document(doc_id).update(updates)
     return {"status": "updated"}
 
 @app.delete("/firebase/llm/{doc_id}")
-def delete_llm_completion(doc_id: str):
+def delete_llm_completion(doc_id: str, user: dict = Depends(verify_firebase_token)):
     app.state.firestore.collection("llm_completions").document(doc_id).delete()
     return {"status": "deleted"}
 
