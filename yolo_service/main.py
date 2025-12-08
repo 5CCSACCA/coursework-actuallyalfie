@@ -12,6 +12,8 @@ import aio_pika
 import asyncio
 import json
 
+CONF_THRESHOLD = float(os.getenv("YOLO_CONF_THRESHOLD", "0.5"))
+
 app = FastAPI()
 
 rabbitmq_connection = None
@@ -100,6 +102,8 @@ async def vision_detect(file: UploadFile = File(...)):
     for box in result.boxes:
         cls_id = int(box.cls)
         conf = float(box.conf)
+        if conf < CONF_THRESHOLD:
+            continue
         name = result.names[cls_id]
 
         x1, y1, x2, y2 = map(float, box.xyxy[0])
@@ -121,7 +125,9 @@ async def vision_detect(file: UploadFile = File(...)):
         "created_at": datetime.datetime.utcnow()
     }
 
-    app.state.detections.insert_one(doc)
+    insert_result = app.state.detections.insert_one(doc)
+    detection_id = str(insert_result.inserted_id)
+
     firebase_doc = {k: v for k, v in doc.items() if k != "_id"}
     firebase_ref = app.state.firestore.collection("yolo_detections").add(firebase_doc)
     firebase_doc_id = firebase_ref[1].id
@@ -129,9 +135,9 @@ async def vision_detect(file: UploadFile = File(...)):
     object_names = [det["class_name"] for det in detections]
 
     message = {
-        "doc_id" : firebase_doc_id,
-        "objects" : object_names,
-        "source" : "yolo_service"
+        "doc_id": detection_id,
+        "objects": object_names,
+        "source": "yolo_service"
     }
 
     await publish_message(message)
@@ -142,7 +148,8 @@ async def vision_detect(file: UploadFile = File(...)):
         "content_type": file.content_type,
         "detections": detections,
         "num_detections": len(detections),
-        "doc_id" : firebase_doc_id
+        "doc_id": detection_id,
+        "firebase_doc_id": firebase_doc_id
     }
 
 @app.get("/detections")
